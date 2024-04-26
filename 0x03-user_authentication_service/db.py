@@ -1,13 +1,15 @@
+#!/usr/bin/env python3
 """DB module
 """
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.orm.session import Session
-from sqlalchemy.exc import NoResultFound, InvalidRequestError
+from sqlalchemy.orm.exc import NoResultFound
+from sqlalchemy.exc import InvalidRequestError
+from user import User
 
 from user import Base
-from user import User
 
 
 class DB:
@@ -17,7 +19,7 @@ class DB:
     def __init__(self) -> None:
         """Initialize a new DB instance
         """
-        self._engine = create_engine("sqlite:///a.db", echo=True)
+        self._engine = create_engine("sqlite:///a.db", echo=False)
         Base.metadata.drop_all(self._engine)
         Base.metadata.create_all(self._engine)
         self.__session = None
@@ -31,29 +33,28 @@ class DB:
             self.__session = DBSession()
         return self.__session
 
-    def add_user(self, email, hashed_password) -> User | None:
-        """Add a new user
+    def add_user(self, email: str, hashed_password: str) -> User:
+        """Add a new user to the database
         """
-        self._session.add(User(email=email, hashed_password=hashed_password))
+        new_user = User(email=email, hashed_password=hashed_password)
+        self._session.add(new_user)
         self._session.commit()
-        return self._session.query(User).filter_by(email=email).first()
+        return new_user
 
-    def find_user_by(self, **kwargs) -> User | None:
+    def find_user_by(self, **kwargs) -> User:
         """Find a user by a given attribute
         """
-        current_user = self._session.query(User).filter_by(**kwargs).first()
-        if (current_user):
-            return current_user
-        elif (current_user is None):
-            raise NoResultFound
-        else:
+        if not kwargs:
             raise InvalidRequestError
+        user = self._session.query(User).filter_by(**kwargs).one()
+        return user
 
     def update_user(self, user_id: int, **kwargs) -> None:
-        """update a user"""
-        found_user = self.find_user_by(id=user_id)
-        if (not found_user):
-            raise NoResultFound
+        """Update user attributes
+        """
+        user = self.find_user_by(id=user_id)
         for key, value in kwargs.items():
-            setattr(found_user, key, value)
+            if not hasattr(user, key):
+                raise ValueError
+            setattr(user, key, value)
         self._session.commit()
